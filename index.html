@@ -26,7 +26,7 @@
   }
   main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
   /* ロゴは白背景のJPGなので、乗算で背景になじませる（ダークモードでは反転） */
-  .logo { display: block; height: 72px; width: auto; margin: 0 0 24px; mix-blend-mode: multiply; }
+  .logo { display: block; height: 120px; width: auto; margin: 56px auto 0; mix-blend-mode: multiply; }
   @media (prefers-color-scheme: dark) { .logo { filter: invert(1); mix-blend-mode: screen; } }
   .label { font-size: 13px; letter-spacing: .15em; color: var(--muted); margin: 0; }
   h1 { font-size: 26px; margin: 4px 0 4px; line-height: 1.4; }
@@ -65,7 +65,6 @@
 </head>
 <body>
 <main>
-  <img class="logo" src="logo.jpg" alt="brighthorsefilm" onerror="this.remove()">
   <p class="label">ONLINE SCREENING</p>
   <h1 id="title">オンライン試写</h1>
   <p class="period" id="period"></p>
@@ -97,6 +96,8 @@
       <a class="btn secondary" id="pdf" href="#" target="_blank" rel="noopener">プレス資料（PDF）をダウンロード</a>
     </div>
   </section>
+
+  <img class="logo" src="logo.jpg" alt="brighthorsefilm" onerror="this.remove()">
 </main>
 
 <script>
