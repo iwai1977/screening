@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>オンライン試写</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70;
+    --line: #dcdad4; --accent: #1d1d1f; --accent-text: #ffffff;
+    --warn-bg: #fff4e5; --warn-line: #f0c27a; --error: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214; --card: #1c1c1f; --text: #ececee; --muted: #9a9aa2;
+      --line: #34343a; --accent: #ececee; --accent-text: #121214;
+      --warn-bg: #2b2216; --warn-line: #7a5a26; --error: #ff7b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    line-height: 1.7;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  .label { font-size: 13px; letter-spacing: .15em; color: var(--muted); margin: 0; }
+  h1 { font-size: 26px; margin: 4px 0 4px; line-height: 1.4; }
+  .period { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  .lead { margin: 0 0 20px; font-size: 15px; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .req { color: var(--error); font-size: 12px; margin-left: 6px; font-weight: 400; }
+  input[type=text], input[type=email], input[type=tel] {
+    width: 100%; font-size: 16px; padding: 12px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hp { position: absolute; left: -9999px; }
+  button, .btn {
+    display: inline-block; width: 100%; padding: 14px; font-size: 16px; font-weight: 600;
+    border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-text);
+    cursor: pointer; text-align: center; text-decoration: none;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .error { color: var(--error); font-size: 14px; margin: 12px 0 0; min-height: 1em; }
+  .player { position: relative; padding-top: 56.25%; background: #000; border-radius: 12px; overflow: hidden; }
+  .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .notice {
+    margin-top: 20px; padding: 16px 18px; border-radius: 12px;
+    background: var(--warn-bg); border: 1px solid var(--warn-line); font-size: 14px;
+  }
+  .notice strong { display: block; margin-bottom: 4px; }
+  .notice ul { margin: 4px 0 0; padding-left: 1.2em; }
+  .actions { margin-top: 16px; }
+  .msg { text-align: center; color: var(--muted); padding: 48px 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="label">ONLINE SCREENING</p>
+  <h1 id="title">オンライン試写</h1>
+  <p class="period" id="period"></p>
+
+  <p class="msg" id="loading">読み込み中…</p>
+  <p class="msg" id="fatal" hidden></p>
+
+  <section class="card" id="formCard" hidden>
+    <p class="lead">ご視聴の前に、以下をご入力ください。送信後、このページで本編をご覧いただけます。</p>
+    <form id="form" novalidate>
+      <div id="fields"></div>
+      <input class="hp" type="text" name="hp" id="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button type="submit" id="submit">送信して視聴する</button>
+      <p class="error" id="error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="viewer" hidden>
+    <div class="player"><iframe id="iframe" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="本編"></iframe></div>
+    <div class="notice">
+      <strong>ご視聴にあたってのお願い</strong>
+      <ul>
+        <li>本編の録画・録音・撮影は固くお断りいたします。</li>
+        <li>本ページのURLはご本人様のみのご利用とし、転送・共有はお控えください。</li>
+        <li>視聴期間を過ぎるとご覧いただけなくなります。</li>
+      </ul>
+    </div>
+    <div class="actions" id="pdfWrap" hidden>
+      <a class="btn secondary" id="pdf" href="#" target="_blank" rel="noopener">プレス資料（PDF）をダウンロード</a>
+    </div>
+  </section>
+</main>
+
+<script>
+  // ▼ Apps Script をウェブアプリとして公開したときの URL を貼る
+  const API_URL = 'https://script.google.com/macros/s/AKfycby0R7IE5dBCIZF1CvKC75bfj6NmdGfnFP3VPeBo6Knf4FvlhkMc6uc27xnfcVgYpgng/exec';
+
+  const $ = (id) => document.getElementById(id);
+  const workId = new URLSearchParams(location.search).get('w') || '';
+  const STORE_KEY = 'screening-profile';
+  let fields = [];
+
+  function show(el) { el.hidden = false; }
+  function fatal(msg) { $('loading').hidden = true; $('fatal').textContent = msg; show($('fatal')); }
+
+  function loadProfile() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function saveProfile(answers) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(answers)); } catch (e) {}
+  }
+
+  async function init() {
+    if (!workId) return fatal('URLが正しくありません。ご案内メールのURLからアクセスしてください。');
+    try {
+      const res = await fetch(API_URL + '?action=config&w=' + encodeURIComponent(workId));
+      const data = await res.json();
+      if (!data.ok) return fatal(data.error);
+      document.title = 'オンライン試写『' + data.title + '』';
+      $('title').textContent = '『' + data.title + '』';
+      if (data.start || data.end) $('period').textContent = '視聴期間：' + data.start + ' ～ ' + data.end;
+      if (data.closedMessage) return fatal(data.closedMessage);
+      fields = data.fields;
+      renderFields(loadProfile());
+      $('loading').hidden = true;
+      show($('formCard'));
+    } catch (e) {
+      fatal('読み込みに失敗しました。時間をおいて再度お試しください。');
+    }
+  }
+
+  function renderFields(saved) {
+    const wrap = $('fields');
+    fields.forEach((f, i) => {
+      const div = document.createElement('div');
+      div.className = 'field';
+      const label = document.createElement('label');
+      label.htmlFor = 'f' + i;
+      label.textContent = f.label;
+      if (f.required) {
+        const req = document.createElement('span');
+        req.className = 'req'; req.textContent = '必須';
+        label.appendChild(req);
+      }
+      const input = document.createElement('input');
+      input.id = 'f' + i;
+      input.type = f.type;
+      input.required = f.required;
+      input.value = saved[f.label] || '';
+      input.autocomplete = f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel'
+        : /氏名|名前/.test(f.label) ? 'name' : /会社|媒体/.test(f.label) ? 'organization' : 'on';
+      div.append(label, input);
+      wrap.appendChild(div);
+    });
+  }
+
+  $('form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    $('error').textContent = '';
+    const answers = {};
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      const v = $('f' + i).value.trim();
+      if (f.required && !v) { $('error').textContent = '「' + f.label + '」を入力してください。'; $('f' + i).focus(); return; }
+      if (f.type === 'email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+        $('error').textContent = 'メールアドレスの形式が正しくありません。'; $('f' + i).focus(); return;
+      }
+      answers[f.label] = v;
+    }
+    $('submit').disabled = true;
+    $('submit').textContent = '送信中…';
+    try {
+      // text/plain で送る（Apps Script へのCORSプリフライトを避けるため）
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ w: workId, answers, hp: $('hp').value })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      saveProfile(answers);
+      $('formCard').hidden = true;
+      $('iframe').src = data.embedUrl;
+      if (data.pdfUrl) { $('pdf').href = data.pdfUrl; show($('pdfWrap')); }
+      show($('viewer'));
+      window.scrollTo({ top: 0 });
+    } catch (e) {
+      $('error').textContent = (!(e instanceof TypeError) && e.message) || '送信に失敗しました。時間をおいて再度お試しください。';
+      $('submit').disabled = false;
+      $('submit').textContent = '送信して視聴する';
+    }
+  });
+
+  init();
+</script>
+</body>
+</html>
